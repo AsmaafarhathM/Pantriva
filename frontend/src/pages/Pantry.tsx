@@ -667,10 +667,11 @@ function Pantry() {
                 /* Bulk Add Rows */
                 <div className="space-y-3">
                   <div className="hidden sm:grid sm:grid-cols-12 gap-2 text-xs font-semibold text-gray-600 px-1">
-                    <span className="col-span-4">Item Name *</span>
-                    <span className="col-span-3">Category</span>
+                    <span className="col-span-3">Item Name *</span>
+                    <span className="col-span-2">Category</span>
                     <span className="col-span-2">Qty *</span>
                     <span className="col-span-2">Unit</span>
+                    <span className="col-span-2">Expiry Date</span>
                     <span className="col-span-1 text-center"></span>
                   </div>
 
@@ -680,7 +681,7 @@ function Pantry() {
                         key={row.id}
                         className="grid grid-cols-1 sm:grid-cols-12 gap-2 p-2.5 sm:p-0 rounded-lg border sm:border-0 border-gray-200 bg-gray-50/50 sm:bg-transparent"
                       >
-                        <div className="sm:col-span-4">
+                        <div className="sm:col-span-3">
                           <input
                             type="text"
                             placeholder={`e.g. Item ${idx + 1}`}
@@ -690,7 +691,7 @@ function Pantry() {
                           />
                         </div>
 
-                        <div className="sm:col-span-3">
+                        <div className="sm:col-span-2">
                           <select
                             value={row.category}
                             onChange={(e) => handleBulkChange(row.id, "category", e.target.value)}
@@ -728,6 +729,15 @@ function Pantry() {
                               </option>
                             ))}
                           </select>
+                        </div>
+
+                        <div className="sm:col-span-2">
+                          <input
+                            type="date"
+                            value={row.expiry_date}
+                            onChange={(e) => handleBulkChange(row.id, "expiry_date", e.target.value)}
+                            className="w-full rounded-lg border border-gray-300 p-2 text-xs focus:border-black focus:ring-1 focus:ring-black bg-white"
+                          />
                         </div>
 
                         <div className="sm:col-span-1 flex items-center justify-end sm:justify-center">
