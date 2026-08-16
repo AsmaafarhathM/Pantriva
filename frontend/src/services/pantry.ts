@@ -16,6 +16,13 @@ export const createPantryItem = async (data: PantryItemCreate): Promise<PantryIt
   return response.data;
 };
 
+export const createMultiplePantryItems = async (
+  data: PantryItemCreate[]
+): Promise<PantryItem[]> => {
+  const response = await api.post<PantryItem[]>("/api/pantry/bulk", data);
+  return response.data;
+};
+
 export const updatePantryItem = async (id: number, data: PantryItemCreate): Promise<PantryItem> => {
   const response = await api.put<PantryItem>(`/api/pantry/${id}`, data);
   return response.data;

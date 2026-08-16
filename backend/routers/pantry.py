@@ -50,6 +50,42 @@ def add_pantry_item(
     return item
 
 
+# CREATE BULK
+@router.post(
+    "/bulk",
+    response_model=List[PantryItemResponse],
+    status_code=status.HTTP_201_CREATED,
+    summary="Add multiple pantry items",
+    description="Bulk insert multiple items into the authenticated user's pantry inventory."
+)
+def add_multiple_pantry_items(
+    items_data: List[PantryItemCreate],
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user)
+):
+    if not items_data:
+        return []
+
+    created_items = []
+    for item_data in items_data:
+        item = PantryItem(
+            user_id=current_user.id,
+            item_name=item_data.item_name,
+            category=item_data.category,
+            quantity=item_data.quantity,
+            unit=item_data.unit,
+            expiry_date=item_data.expiry_date
+        )
+        db.add(item)
+        created_items.append(item)
+
+    db.commit()
+    for item in created_items:
+        db.refresh(item)
+
+    return created_items
+
+
 # READ ALL
 @router.get(
     "/",
