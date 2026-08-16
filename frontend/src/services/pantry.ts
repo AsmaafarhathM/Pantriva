@@ -19,8 +19,18 @@ export const createPantryItem = async (data: PantryItemCreate): Promise<PantryIt
 export const createMultiplePantryItems = async (
   data: PantryItemCreate[]
 ): Promise<PantryItem[]> => {
-  const response = await api.post<PantryItem[]>("/api/pantry/bulk", data);
-  return response.data;
+  try {
+    const response = await api.post<PantryItem[]>("/api/pantry/bulk", data);
+    return response.data;
+  } catch (err: unknown) {
+    const errorObj = err as { response?: { status?: number } };
+    // If bulk endpoint is not yet live or returning 405/404, fallback to parallel individual creation
+    if (errorObj.response && (errorObj.response.status === 405 || errorObj.response.status === 404)) {
+      const results = await Promise.all(data.map((item) => createPantryItem(item)));
+      return results;
+    }
+    throw err;
+  }
 };
 
 export const updatePantryItem = async (id: number, data: PantryItemCreate): Promise<PantryItem> => {
