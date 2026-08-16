@@ -58,6 +58,12 @@ def add_pantry_item(
     summary="Add multiple pantry items",
     description="Bulk insert multiple items into the authenticated user's pantry inventory."
 )
+@router.post(
+    "/bulk/",
+    response_model=List[PantryItemResponse],
+    status_code=status.HTTP_201_CREATED,
+    include_in_schema=False
+)
 def add_multiple_pantry_items(
     items_data: List[PantryItemCreate],
     db: Session = Depends(get_db),
