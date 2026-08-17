@@ -20,6 +20,18 @@ load_dotenv()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 
+# Fallback model priority chain
+PRIMARY_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.5-flash")
+FALLBACK_MODELS = [
+    PRIMARY_MODEL,
+    "gemini-3.5-flash-lite",
+    "gemini-flash-lite-latest",
+    "gemini-3.1-flash-lite",
+]
+# Remove duplicates while preserving order
+MODELS_TO_TRY = list(dict.fromkeys(FALLBACK_MODELS))
+
+
 class AiServiceError(Exception):
     """Custom exception for Gemini AI service errors without leaking keys or raw trace."""
     pass
@@ -46,6 +58,8 @@ def generate_meal_plan(
 ) -> MealPlanResponseSchema:
     """
     Generate and validate a structured meal plan using Gemini AI.
+    Uses automatic fallback across multiple Gemini models to prevent
+    failures caused by temporary demand spikes or per-model quota limits.
     Guarantees strict Pydantic validation of the response before returning.
     """
     client = _get_client()
@@ -78,22 +92,39 @@ Requirements:
 - For each ingredient, provide a numeric quantity and a standard unit (e.g. g, kg, pieces, tbsp).
 """
 
-    try:
-        response = client.models.generate_content(
-            model="gemini-flash-latest",
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-                response_schema=MealPlanResponseSchema,
+    response = None
+    last_error = None
+
+    for model_name in MODELS_TO_TRY:
+        try:
+            logger.info("Attempting meal plan generation with model: %s", model_name)
+            response = client.models.generate_content(
+                model=model_name,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    response_schema=MealPlanResponseSchema,
+                )
             )
-        )
-    except Exception as e:
-        logger.error("Gemini API request failed: %s", type(e).__name__)
-        raise AiServiceError("Failed to communicate with AI generation service") from None
+            if response and response.text:
+                logger.info("Successfully generated meal plan with model: %s", model_name)
+                break
+            else:
+                logger.warning("Empty response from model %s, trying fallback...", model_name)
+        except Exception as e:
+            logger.warning(
+                "Gemini model %s failed: %s (%s). Trying next fallback...",
+                model_name,
+                type(e).__name__,
+                str(e)[:200]
+            )
+            last_error = e
 
     if not response or not response.text:
-        logger.error("Empty response received from Gemini API")
-        raise AiServiceError("Empty response from AI service")
+        logger.error("All Gemini models failed. Last error: %s", last_error)
+        raise AiServiceError(
+            f"Failed to communicate with AI generation service: {last_error or 'Empty response'}"
+        )
 
     try:
         raw_json = json.loads(response.text)
