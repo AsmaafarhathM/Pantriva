@@ -69,27 +69,41 @@ def generate_meal_plan(
         for item in pantry_items
     ) if pantry_items else "No items in pantry"
 
-    avoid_text = ", ".join(avoid) if avoid else "None"
+    avoid_clean = [a.strip() for a in avoid if a.strip()]
+    if avoid_clean:
+        avoid_items_str = ", ".join(avoid_clean)
+        avoid_rules = f"""
+CRITICAL RESTRICTION - ZERO-TOLERANCE ALLERGEN & EXCLUSION FILTER:
+The user has specified the following foods/allergens to strictly avoid: {avoid_items_str}
+- You MUST NOT include {avoid_items_str}, or any dishes containing them, their derivatives, or related forms (e.g. if 'egg' is avoided: do NOT include eggs, egg curry, omelette, boiled egg, egg bhurji, egg fried rice, mayonnaise, etc.).
+- Even if the diet preference is Non-Vegetarian, do NOT use {avoid_items_str} in any breakfast, lunch, or dinner. Use other compliant items (e.g. chicken, fish, mutton, paneer, lentils, vegetables, poha, upma, paratha) instead.
+- Every single meal across all {days} days must be 100% completely free of {avoid_items_str}.
+"""
+    else:
+        avoid_items_str = "None"
+        avoid_rules = ""
 
     prompt = f"""
-You are a meal planning assistant for Pantriva.
+You are a professional nutrition and meal planning AI assistant for Pantriva.
 
 Create a practical meal plan based on the following details:
 - Number of people: {people}
 - Number of days: {days}
 - Budget: ₹{budget}
 - Diet: {diet}
-- Foods to avoid: {avoid_text}
+- Foods to strictly avoid: {avoid_items_str}
 - Available pantry items:
 {pantry_text}
+
+{avoid_rules}
 
 Requirements:
 - Create breakfast, lunch, and dinner for each day (day 1 to {days}).
 - Scale ingredient quantities accurately for {people} people.
 - Prefer using available pantry items where possible.
-- Strictly avoid the specified foods to avoid.
+- Adhere strictly to the diet ({diet}) and allergen/avoidance rules ({avoid_items_str}).
 - Keep meals practical, culturally relevant, and cost-effective within the budget.
-- For each ingredient, provide a numeric quantity and a standard unit (e.g. g, kg, pieces, tbsp).
+- For each ingredient, provide a numeric quantity and a standard unit (e.g. g, kg, pieces, tbsp, ml).
 """
 
     response = None

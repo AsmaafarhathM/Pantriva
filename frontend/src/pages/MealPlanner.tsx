@@ -52,14 +52,30 @@ function MealPlanner() {
       .catch(() => setPantryItems([]));
   }, []);
 
+  const commitAvoidInput = (raw: string) => {
+    if (!raw.trim()) return;
+    const tokens = raw
+      .split(/[,;\n]+/)
+      .map((t) => t.trim())
+      .filter((t) => t.length > 0);
+    if (tokens.length > 0) {
+      setAvoidList((prev) => {
+        const next = [...prev];
+        for (const token of tokens) {
+          if (!next.some((existing) => existing.toLowerCase() === token.toLowerCase())) {
+            next.push(token);
+          }
+        }
+        return next;
+      });
+    }
+    setAvoidInput("");
+  };
+
   const handleAddAvoid = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter" && avoidInput.trim()) {
+    if (e.key === "Enter" || e.key === ",") {
       e.preventDefault();
-      const val = avoidInput.trim();
-      if (!avoidList.includes(val)) {
-        setAvoidList([...avoidList, val]);
-      }
-      setAvoidInput("");
+      commitAvoidInput(avoidInput);
     }
   };
 
@@ -83,6 +99,20 @@ function MealPlanner() {
       return;
     }
 
+    // Automatically commit any pending un-tagged text in the avoid input box
+    const pendingTokens = avoidInput
+      .split(/[,;\n]+/)
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+    const combinedAvoid = Array.from(
+      new Set([
+        ...avoidList.map((t) => t.trim()),
+        ...pendingTokens,
+      ].filter(Boolean))
+    );
+    setAvoidList(combinedAvoid);
+    setAvoidInput("");
+
     setError("");
     setGenerating(true);
     setGeneratedPlan(null);
@@ -96,7 +126,7 @@ function MealPlanner() {
         days,
         budget,
         diet,
-        avoid: avoidList
+        avoid: combinedAvoid
       });
 
       setGeneratedPlan(mealResponse.meal_plan);
@@ -273,6 +303,7 @@ function MealPlanner() {
                 value={avoidInput}
                 onChange={(e) => setAvoidInput(e.target.value)}
                 onKeyDown={handleAddAvoid}
+                onBlur={() => commitAvoidInput(avoidInput)}
                 className="flex-1 min-w-[200px] border-none bg-transparent p-1 text-sm text-gray-900 focus:outline-none placeholder-gray-400"
               />
             </div>
