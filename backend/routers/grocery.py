@@ -17,6 +17,7 @@ from schemas.grocery import (
 from services.auth import get_current_user
 from services.grocery_generator import generate_grocery_from_meals
 from services.budget import calculate_budget
+from services.price_estimator import estimate_price
 
 logger = logging.getLogger(__name__)
 
@@ -69,9 +70,22 @@ def get_grocery_items(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user)
 ):
-    return db.query(GroceryItem).filter(
+    items = db.query(GroceryItem).filter(
         GroceryItem.user_id == current_user.id
     ).order_by(GroceryItem.id.asc()).all()
+
+    updated = False
+    for item in items:
+        if item.estimated_price is None or item.estimated_price <= 0:
+            price_res = estimate_price(item.item_name, item.quantity, item.unit)
+            if price_res.get("price_available") and price_res.get("estimated_price"):
+                item.estimated_price = price_res["estimated_price"]
+                updated = True
+
+    if updated:
+        db.commit()
+
+    return items
 
 
 @router.get(

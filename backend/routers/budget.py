@@ -8,6 +8,7 @@ from models.budget import Budget
 from models.grocery import GroceryItem
 from schemas.budget import BudgetCreate, BudgetResponse, BudgetStatusResponse
 from services.auth import get_current_user
+from services.price_estimator import estimate_price
 
 logger = logging.getLogger(__name__)
 
@@ -98,7 +99,18 @@ def get_budget_summary(
         GroceryItem.is_purchased == False
     ).all()
 
-    # Safely handle items with None estimated_price
+    updated = False
+    for item in grocery_items:
+        if item.estimated_price is None or item.estimated_price <= 0:
+            price_res = estimate_price(item.item_name, item.quantity, item.unit)
+            if price_res.get("price_available") and price_res.get("estimated_price"):
+                item.estimated_price = price_res["estimated_price"]
+                updated = True
+
+    if updated:
+        db.commit()
+
+    # Safely calculate total estimated cost across all items
     estimated_cost = sum(
         float(item.estimated_price)
         for item in grocery_items

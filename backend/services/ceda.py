@@ -9,8 +9,8 @@ from config import CEDA_API_KEY
 logger = logging.getLogger(__name__)
 
 CEDA_BASE_URL = "https://api.ceda.ashoka.edu.in/v1"
-DEFAULT_TIMEOUT = 10
-MAX_RETRIES = 2
+DEFAULT_TIMEOUT = 3
+MAX_RETRIES = 1
 
 
 class CedaApiError(Exception):
@@ -32,39 +32,41 @@ def _get_headers() -> dict:
     }
 
 
+_rate_limit_cooldown_until: float = 0.0
+
+
 def _execute_with_retry(method: str, url: str, **kwargs) -> dict:
-    """Execute HTTP request with safe retry on 429 rate limit without leaking credentials."""
-    for attempt in range(MAX_RETRIES + 1):
-        try:
-            if method.lower() == "get":
-                response = requests.get(url, timeout=DEFAULT_TIMEOUT, **kwargs)
-            else:
-                response = requests.post(url, timeout=DEFAULT_TIMEOUT, **kwargs)
+    """Execute HTTP request with instant fallback if CEDA is rate-limited or unavailable."""
+    global _rate_limit_cooldown_until
+    now = time.time()
+    if now < _rate_limit_cooldown_until:
+        # Circuit breaker open, instantly fallback
+        return {"output": {"type": "error", "message": "Rate limited cooldown", "data": []}}
 
-            if response.status_code == 429:
-                if attempt < MAX_RETRIES:
-                    wait_sec = 2 * (attempt + 1)
-                    logger.warning("CEDA rate limit (429) hit for %s. Retrying in %ds...", url, wait_sec)
-                    time.sleep(wait_sec)
-                    continue
-                else:
-                    logger.warning("CEDA rate limit (429) exceeded for %s", url)
-                    return {"output": {"type": "error", "message": "Rate limit exceeded", "data": []}}
+    try:
+        if method.lower() == "get":
+            response = requests.get(url, timeout=DEFAULT_TIMEOUT, **kwargs)
+        else:
+            response = requests.post(url, timeout=DEFAULT_TIMEOUT, **kwargs)
 
-            response.raise_for_status()
-            return response.json()
+        if response.status_code == 429:
+            logger.warning("CEDA rate limit (429) hit for %s. Enabling 60s cooldown...", url)
+            _rate_limit_cooldown_until = time.time() + 60.0
+            return {"output": {"type": "error", "message": "Rate limit exceeded", "data": []}}
 
-        except requests.exceptions.HTTPError as e:
-            status = e.response.status_code if e.response is not None else "unknown"
-            logger.error("CEDA HTTP error: status %s for url %s", status, url)
-            if status == 429:
-                return {"output": {"type": "error", "message": "Rate limit exceeded", "data": []}}
-            raise CedaApiError(f"CEDA request failed with status code {status}") from None
-        except requests.exceptions.RequestException as e:
-            logger.error("CEDA connection error: %s", type(e).__name__)
-            raise CedaApiError("Failed to connect to CEDA API") from None
+        response.raise_for_status()
+        return response.json()
 
-    return {"output": {"type": "error", "message": "Max retries exceeded", "data": []}}
+    except requests.exceptions.HTTPError as e:
+        status = e.response.status_code if e.response is not None else "unknown"
+        if status == 429:
+            _rate_limit_cooldown_until = time.time() + 60.0
+            return {"output": {"type": "error", "message": "Rate limit exceeded", "data": []}}
+        logger.debug("CEDA HTTP error: status %s for url %s", status, url)
+        raise CedaApiError(f"CEDA request failed with status code {status}") from None
+    except requests.exceptions.RequestException as e:
+        logger.debug("CEDA connection error: %s", type(e).__name__)
+        raise CedaApiError("Failed to connect to CEDA API") from None
 
 
 def get_commodities() -> dict:
